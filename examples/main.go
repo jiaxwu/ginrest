@@ -65,7 +65,7 @@ type GetUserInfoRsp struct {
 
 func GetUserInfo(ctx context.Context, req *GetUserInfoReq) (*GetUserInfoRsp, error) {
 	if req.UID != 10 {
-		return nil, ginrest.New(ErrCodeUserNotExists, "user not exists")
+		return nil, ginrest.NewError(ErrCodeUserNotExists, "user not exists")
 	}
 	return &GetUserInfoRsp{
 		UID:      req.UID,
@@ -84,7 +84,7 @@ type UpdateUserInfoRsp struct{}
 
 func UpdateUserInfo(ctx context.Context, req *UpdateUserInfoReq) (*UpdateUserInfoRsp, error) {
 	if req.UID != 10 {
-		return nil, ginrest.New(ErrCodeUserNotExists, "user not exists")
+		return nil, ginrest.NewError(ErrCodeUserNotExists, "user not exists")
 	}
 	return &UpdateUserInfoRsp{}, nil
 }

@@ -15,16 +15,11 @@ func (e *Error) Error() string {
 }
 
 // 通过code和msg产生一个错误
-func New(code int, msg string) error {
+func NewError(code int, msg string) error {
 	return &Error{
 		Code: code,
 		Msg:  msg,
 	}
-}
-
-// 未知错误
-func NewUnknownException(err error) error {
-	return New(ErrCodeUnknownException, err.Error())
 }
 
 // 转Error
@@ -37,16 +32,16 @@ func ToError(err error) *Error {
 }
 
 // 获取错误的错误码
-func Code(err error) int {
+func ErrCode(err error) int {
 	return ToError(err).Code
 }
 
 // 获取trpc错误的消息
-func Msg(err error) string {
+func ErrMsg(err error) string {
 	return ToError(err).Msg
 }
 
 // 错误是否保存对应错误码
-func Equal(err error, code int) bool {
-	return Code(err) == code
+func ErrEqual(err error, code int) bool {
+	return ErrCode(err) == code
 }

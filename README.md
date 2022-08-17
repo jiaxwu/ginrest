@@ -1,6 +1,5 @@
 # ginrest
 消除RESTful接口的模板代码
-
 # 背景
 基于现在微服务或者服务化的思想，我们大部分的业务逻辑处理函数都是长这样的：
 
@@ -34,13 +33,16 @@ func (s *Service) GetUserInfo(ctx context.Context, req *pb.GetUserInfoReq, opts 
 
 # 特性
 这个库提供以下特性：
-- RESTful请求响应封装
+- 封装RESTful请求响应
   - 封装RESTful请求为标准格式服务
-  - 封装标准格式服务处理结果为标准RESTful响应
-  - 默认提供统一数字错误码格式，\[0, 4XXXX, 5XXXX\]
-  - 默认使用标准错误结构体{code, msg}
-  - 默认统一响应格式{code, msg, data}
+    - 对应Do()、DoOpt()方法
+  - 封装标准格式服务处理结果为标准RESTful响应格式：Rsp{code, msg, data}
+    - 对应ProcessRsp()、Success()、Failure()、FailureCodeMsg()方法
+  - 默认使用统一数字错误码格式：\[0, 4XXXX, 5XXXX\]
+  - 默认使用标准错误格式：Error{code, msg}
+    - 对应NewError()、ToError()、ErrCode()、ErrMsg()、ErrEqual()方法
   - 默认统一状态码\[200, 400, 500\]
+    - 对应错误码\[0, 4XXXX, 5XXXX\]
 - 提供Recovery中间件，统一panic时的响应格式
 - 提供SetKey()、GetKey()方法，用于存储请求上下文（泛型）
 - 提供ReqFunc()，用于设置Req（泛型）

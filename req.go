@@ -45,7 +45,7 @@ func do[Req any, Rsp any, Opt any](reqFunc ReqFunc[Req],
 		} else if serviceOptFunc != nil {
 			rsp, err = serviceOptFunc(c, req, opts...)
 		} else {
-			panic("must set ServiceFunc or ServiceFuncOpt")
+			panic("must one of ServiceFunc and ServiceFuncOpt")
 		}
 		// 处理响应
 		ProcessRsp(c, rsp, err)

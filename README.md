@@ -36,19 +36,16 @@ func (s *Service) GetUserInfo(ctx context.Context, req *pb.GetUserInfoReq, opts 
 这个库提供以下特性：
 - 封装RESTful请求响应
   - 封装RESTful请求为标准格式服务
-    - 对应Do()、DoOpt()方法
   - 封装标准格式服务处理结果为标准RESTful响应格式：Rsp{code, msg, data}
-    - 对应ProcessRsp()、Success()、Failure()、FailureCodeMsg()方法
   - 默认使用统一数字错误码格式：\[0, 4XXXX, 5XXXX\]
   - 默认使用标准错误格式：Error{code, msg}
-    - 对应NewError()、ToError()、ErrCode()、ErrMsg()、ErrEqual()方法
   - 默认统一状态码\[200, 400, 500\]
-    - 对应错误码\[0, 4XXXX, 5XXXX\]
 - 提供Recovery中间件，统一panic时的响应格式
 - 提供SetKey()、GetKey()方法，用于存储请求上下文（泛型）
 - 提供ReqFunc()，用于设置Req（泛型）
 
 # 使用例子
+示例代码在：https://github.com/jiaxwu/ginrest/blob/main/examples/main.go
 
 首先我们实现两个简单的服务：
 ```go
@@ -110,9 +107,10 @@ func Register(e *gin.Engine) {
 	// 简单请求，不需要认证
 	e.GET("/user/info/get", ginrest.Do(nil, GetUserInfo))
 	// 认证，绑定UID，处理
-	e.POST("/user/info/update", Verify, ginrest.Do(func(c *gin.Context, req *UpdateUserInfoReq) {
+        reqFunc := func(c *gin.Context, req *UpdateUserInfoReq) {
 		req.UID = GetUID(c)
-	}, UpdateUserInfo))
+	} // 这里拆多一步是为了显示第一个参数是ReqFunc
+	e.POST("/user/info/update", Verify, ginrest.Do(reqFunc, UpdateUserInfo))
 }
 
 const (
@@ -180,6 +178,155 @@ POST http://127.0.0.1:8000/user/info/update
     "msg": "ok",
     "data": {}
 }
+```
+
+# 实现原理
+Do()和DoOpt()都会转发到do()，它其实是一个模板函数，把脏活累活给处理了：
+```go
+// 处理请求
+func do[Req any, Rsp any, Opt any](reqFunc ReqFunc[Req],
+	serviceFunc ServiceFunc[Req, Rsp], serviceOptFunc ServiceOptFunc[Req, Rsp, Opt], opts ...Opt) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 参数绑定
+		req, err := BindJSON[Req](c)
+		if err != nil {
+			return
+		}
+		// 进一步处理请求结构体
+		if reqFunc != nil {
+			reqFunc(c, req)
+		}
+		var rsp *Rsp
+		// 业务逻辑函数调用
+		if serviceFunc != nil {
+			rsp, err = serviceFunc(c, req)
+		} else if serviceOptFunc != nil {
+			rsp, err = serviceOptFunc(c, req, opts...)
+		} else {
+			panic("must set ServiceFunc or ServiceFuncOpt")
+		}
+		// 处理响应
+		ProcessRsp(c, rsp, err)
+	}
+}
+```
+
+# 功能列表
+
+## 处理请求
+用于把一个标准服务封装为一个RESTful`gin.HandlerFunc`，对应Do()、DoOpt()函数。
+
+DoOpt()相比于Do()多了一个opts参数，因为很多rpc框架客户端都有一个opts参数作为结尾。
+
+还有一个`BindJSON()`，用于把请求体包装为一个Req结构体：
+```go
+// 参数绑定
+func BindJSON[T any](c *gin.Context) (*T, error) {
+	var req T
+	if err := c.ShouldBindJSON(&req); err != nil {
+		FailureCodeMsg(c, ErrCodeInvalidReq, "invalid param")
+		return nil, err
+	}
+	return &req, nil
+}
+```
+如果无法使用Do()和DoOpt()则可以使用此方法。
+
+## 处理响应
+用于把rsp、error、errcode、errmsg等数据封装为一个JSON格式响应体，对应ProcessRsp()、Success()、Failure()、FailureCodeMsg()函数。
+
+比如`ProcessRsp()`需要带上rsp和error，这样业务里面就不需要再写如下模板代码了：
+```go
+// 处理简单响应
+func ProcessRsp(c *gin.Context, rsp any, err error) {
+	if err != nil {
+		Failure(c, err)
+		return
+	}
+	Success(c, rsp)
+}
+```
+
+响应格式统一为：
+```go
+// 响应
+type Rsp struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+	Data any    `json:"data,omitempty"`
+}
+```
+
+`Success()`用于处理成功情况：
+```go
+// 请求成功
+func Success(c *gin.Context, data any) {
+	ginRsp(c, http.StatusOK, &Rsp{
+		Code: ErrCodeOK,
+		Msg:  "ok",
+		Data: data,
+	})
+}
+```
+其余同理。
+
+如果无法使用Do()和DoOpt()则可以使用这些方法。
+
+## 处理错误
+一般我们都需要在出错时带上一个业务错误码，方便客户端处理。因此我们需要提供一个合适的error类型：
+```go
+// 错误
+type Error struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+}
+```
+我们提供了一些函数方便使用`Error`，对应NewError()、ToError()、ErrCode()、ErrMsg()、ErrEqual()函数。
+
+比如`NewError()`生成一个Error类型error：
+```go
+// 通过code和msg产生一个错误
+func NewError(code int, msg string) error {
+	return &Error{
+		Code: code,
+		Msg:  msg,
+	}
+}
+```
+
+## 请求上下文操作
+Gin的请求是链式处理的，也就是多个handler顺序的处理一个请求，比如：
+```go
+        reqFunc := func(c *gin.Context, req *UpdateUserInfoReq) {
+		req.UID = ginrest.GetKey[int](c, KeyUserID)
+	}
+        // 认证，绑定UID，处理
+	e.POST("/user/info/update", Verify, ginrest.Do(reqFunc, UpdateUserInfo))
+```
+这个接口经历了Verify和ginrest.Do两个handler，其中我们在Verify的时候通过认证知道了用户的身份信息（比如uid），我们希望把这个uid存起来，这样可以在业务逻辑里使用。
+
+因此我们提供了SetKey()、GetKey()两个函数，用于存储请求上下文：
+
+比如认证通过后我们可以设置UID到上下文，然后在reqFunc()里读取设置到req里面（下面介绍）。
+```go
+// 认证
+func Verify(c *gin.Context) {
+	// 认证处理
+	// ...
+	// 忽略认证的具体逻辑
+	ginrest.SetKey(c, KeyUserID, uid)
+}
+```
+
+## 请求结构体处理
+上面我们设置了请求上下文，比如UID，但是其实我们并不知道具体这个UID是需要设置到req里的哪个字段，因此我们提供了一个回调函数ReqFunc()，用于设置Req：
+```go
+	// 这里↓
+        reqFunc := func(c *gin.Context, req *UpdateUserInfoReq) {
+		req.UID = ginrest.GetKey[int](c, KeyUserID)
+	}
+        // 认证，绑定UID，处理
+	e.POST("/user/info/update", Verify, ginrest.Do(reqFunc, UpdateUserInfo))
 ```
 
 # 注

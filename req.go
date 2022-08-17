@@ -29,16 +29,17 @@ func Do[Req any, Rsp any](reqFunc ReqFunc[Req], serviceFunc ServiceFunc[Req, Rsp
 func do[Req any, Rsp any, Opt any](reqFunc ReqFunc[Req],
 	serviceFunc ServiceFunc[Req, Rsp], serviceOptFunc ServiceOptFunc[Req, Rsp, Opt], opts ...Opt) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 参数绑定
 		req, err := BindJSON[Req](c)
 		if err != nil {
 			return
 		}
+		// 进一步处理请求结构体
 		if reqFunc != nil {
 			reqFunc(c, req)
 		}
-		var (
-			rsp *Rsp
-		)
+		var rsp *Rsp
+		// 业务逻辑函数调用
 		if serviceFunc != nil {
 			rsp, err = serviceFunc(c, req)
 		} else if serviceOptFunc != nil {
@@ -46,6 +47,7 @@ func do[Req any, Rsp any, Opt any](reqFunc ReqFunc[Req],
 		} else {
 			panic("must set ServiceFunc or ServiceFuncOpt")
 		}
+		// 处理响应
 		ProcessRsp(c, rsp, err)
 	}
 }

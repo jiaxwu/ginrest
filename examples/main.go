@@ -22,9 +22,10 @@ func Register(e *gin.Engine) {
 	// 简单请求，不需要认证
 	e.GET("/user/info/get", ginrest.Do(nil, GetUserInfo))
 	// 认证，绑定UID，处理
-	e.POST("/user/info/update", Verify, ginrest.Do(func(c *gin.Context, req *UpdateUserInfoReq) {
-		req.UID = GetUID(c)
-	}, UpdateUserInfo))
+	reqFunc := func(c *gin.Context, req *UpdateUserInfoReq) {
+		req.UID = ginrest.GetKey[int](c, KeyUserID)
+	}
+	e.POST("/user/info/update", Verify, ginrest.Do(reqFunc, UpdateUserInfo))
 }
 
 const (

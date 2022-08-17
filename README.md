@@ -1,5 +1,6 @@
 # ginrest
 消除RESTful接口的模板代码
+
 # 背景
 基于现在微服务或者服务化的思想，我们大部分的业务逻辑处理函数都是长这样的：
 
@@ -67,7 +68,7 @@ type GetUserInfoRsp struct {
 
 func GetUserInfo(ctx context.Context, req *GetUserInfoReq) (*GetUserInfoRsp, error) {
 	if req.UID != 10 {
-		return nil, ginrest.New(ErrCodeUserNotExists, "user not exists")
+		return nil, ginrest.NewError(ErrCodeUserNotExists, "user not exists")
 	}
 	return &GetUserInfoRsp{
 		UID:      req.UID,
@@ -86,12 +87,14 @@ type UpdateUserInfoRsp struct{}
 
 func UpdateUserInfo(ctx context.Context, req *UpdateUserInfoReq) (*UpdateUserInfoRsp, error) {
 	if req.UID != 10 {
-		return nil, ginrest.New(ErrCodeUserNotExists, "user not exists")
+		return nil, ginrest.NewError(ErrCodeUserNotExists, "user not exists")
 	}
 	return &UpdateUserInfoRsp{}, nil
 }
 ```
 然后使用Gin+Ginrest包装为RESTful接口：
+
+可以看到Register()里面每个接口都只需要一行代码！
 ```go
 func main() {
 	e := gin.New()
